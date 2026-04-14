@@ -12,65 +12,78 @@ async function fetchAndConvert() {
     const result = {};
 
     let currentLogo = null;
-    let currentGroup = null;
     let currentChannel = null;
+    let currentHeaders = {};
+    let currentUserAgent = null;
 
     let counter = 1;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
 
-      // Parse #EXTINF
+      // 🔹 Parse EXTINF
       if (line.startsWith("#EXTINF:")) {
         const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-        const groupMatch = line.match(/group-title="([^"]+)"/);
         const nameMatch = line.match(/,(.*)$/);
 
         currentLogo = logoMatch ? logoMatch[1] : null;
-        currentGroup = groupMatch ? cleanText(groupMatch[1]) : null;
         currentChannel = nameMatch ? cleanText(nameMatch[1]) : null;
       }
 
-      // Skip headers/options
-      else if (
-        line.startsWith("#EXTVLCOPT") ||
-        line.startsWith("#EXTHTTP") ||
-        line === "" ||
-        line.startsWith("#EXTM3U")
-      ) {
+      // 🔹 Extract USER-AGENT
+      else if (line.startsWith("#EXTVLCOPT")) {
+        const uaMatch = line.match(/http-user-agent=(.*)/);
+        currentUserAgent = uaMatch ? uaMatch[1].trim() : null;
+      }
+
+      // 🔹 Extract HEADERS JSON
+      else if (line.startsWith("#EXTHTTP")) {
+        try {
+          const jsonPart = line.replace("#EXTHTTP:", "").trim();
+          currentHeaders = JSON.parse(jsonPart);
+        } catch {
+          currentHeaders = {};
+        }
+      }
+
+      // 🔹 Skip useless lines
+      else if (line === "" || line.startsWith("#EXTM3U")) {
         continue;
       }
 
-      // Stream URL
+      // 🔹 URL line
       else if (line.startsWith("http") && currentChannel) {
         result[counter] = {
           channel_name: currentChannel,
-          group_title: currentGroup,
+          group_title: "CS OTT | ZEE5", // ✅ FORCED
           tvg_logo: currentLogo,
-          url: line
+          url: line,
+          user_agent: currentUserAgent,
+          headers: currentHeaders
         };
 
         counter++;
 
         // Reset
         currentLogo = null;
-        currentGroup = null;
         currentChannel = null;
+        currentHeaders = {};
+        currentUserAgent = null;
       }
     }
 
     fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result, null, 2), "utf-8");
-    console.log("✅ stream.json created successfully");
+    console.log("✅ stream.json created with full extraction");
 
   } catch (error) {
     console.error("❌ Error:", error.message);
   }
 }
 
-// 🔧 Fix weird encoded text like â›¨ ð...
+// 🔧 Clean weird encoded text
 function cleanText(text) {
   return text
-    .replace(/[^\x20-\x7E]+/g, " ") // remove weird unicode junk
+    .replace(/[^\x20-\x7E]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
