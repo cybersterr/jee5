@@ -1,4 +1,4 @@
-name: Fetch and Update Stream JSON
+name: Fetch and Update Stream M3U
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  fetch-json:
+  fetch-m3u:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,12 +27,12 @@ jobs:
           cd scraper
           npm install
 
-      - name: Run fetch script
+      - name: Run converter script (JSON → M3U)
         run: |
           cd scraper
           npm start
 
-      - name: Commit and push stream.json
+      - name: Commit and push stream.m3u
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -42,11 +42,13 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git pull --rebase origin main
 
-          cp scraper/stream.json stream.json
-          git add stream.json
+          # ✅ Copy NEW output file
+          cp scraper/stream.m3u stream.m3u
+
+          git add stream.m3u
 
           if ! git diff-index --quiet HEAD; then
-            git commit -m "📥 Updated stream.json from remote JSON"
+            git commit -m "📺 Updated stream.m3u from JSON source"
             git push origin main
           else
             echo "No changes to push."
