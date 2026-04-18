@@ -1,7 +1,7 @@
 const axios = require("axios");
 const fs = require("fs");
 
-const JSON_URL = "PASTE_YOUR_JSON_URL_HERE";
+const JSON_URL = "https://netx.streamstar18.workers.dev/g5sd";
 const OUTPUT_FILE = "stream.m3u";
 
 // 🔹 Group settings
