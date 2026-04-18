@@ -1,86 +1,76 @@
 const axios = require("axios");
 const fs = require("fs");
 
-const STREAM_URL = "https://join-vaathala1-for-more.vodep39240327.workers.dev/zee5.m3u";
-const OUTPUT_FILE = "stream.json";
+const JSON_URL = "PASTE_YOUR_JSON_URL_HERE";
+const OUTPUT_FILE = "stream.m3u";
 
-async function fetchAndConvert() {
+// 🔹 Group settings
+const GROUP_TITLE = "CS OTT | Zee5";
+const GROUP_LOGO = "https://image.pngaaa.com/799/2122799-middle.png";
+
+// 🔹 Entry to exclude
+const EXCLUDE_NAME = "Install NetX Player - Join Telegram: @streamstartv";
+
+async function convertJSONtoM3U() {
   try {
-    const response = await axios.get(STREAM_URL, { responseType: "text" });
-    const lines = response.data.split("\n");
+    const response = await axios.get(JSON_URL);
+    const data = response.data;
 
-    const result = {};
+    let m3u = "#EXTM3U\n\n";
 
-    let currentLogo = null;
-    let currentChannel = null;
-    let currentHeaders = {};
-    let currentUserAgent = null;
+    data.forEach((item) => {
+      // ❌ Skip unwanted entry
+      if (item.name === EXCLUDE_NAME) return;
 
-    let counter = 1;
+      const name = cleanText(item.name || "Unknown");
+      const logo = item.logo || GROUP_LOGO;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+      let streamUrl = "";
+      let extraLines = "";
 
-      // 🔹 Parse EXTINF
-      if (line.startsWith("#EXTINF:")) {
-        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-        const nameMatch = line.match(/,(.*)$/);
+      // 🔹 DASH (MPD)
+      if (item.mpd_url) {
+        streamUrl = item.mpd_url;
 
-        currentLogo = logoMatch ? logoMatch[1] : null;
-        currentChannel = nameMatch ? cleanText(nameMatch[1]) : null;
-      }
-
-      // 🔹 Extract USER-AGENT
-      else if (line.startsWith("#EXTVLCOPT")) {
-        const uaMatch = line.match(/http-user-agent=(.*)/);
-        currentUserAgent = uaMatch ? uaMatch[1].trim() : null;
-      }
-
-      // 🔹 Extract HEADERS JSON
-      else if (line.startsWith("#EXTHTTP")) {
-        try {
-          const jsonPart = line.replace("#EXTHTTP:", "").trim();
-          currentHeaders = JSON.parse(jsonPart);
-        } catch {
-          currentHeaders = {};
+        if (item.user_agent) {
+          extraLines += `#EXTVLCOPT:http-user-agent=${item.user_agent}\n`;
         }
+
+        if (item.headers && Object.keys(item.headers).length > 0) {
+          extraLines += `#EXTHTTP:${JSON.stringify(item.headers)}\n`;
+        }
+
+        if (item.license_url) {
+          extraLines += `#KODIPROP:inputstream.adaptive.license_key=${item.license_url}\n`;
+        }
+
+        extraLines += `#KODIPROP:inputstream.adaptive.manifest_type=mpd\n`;
       }
 
-      // 🔹 Skip useless lines
-      else if (line === "" || line.startsWith("#EXTM3U")) {
-        continue;
+      // 🔹 HLS fallback (if exists)
+      else if (item.m3u8_url) {
+        streamUrl = item.m3u8_url;
       }
 
-      // 🔹 URL line
-      else if (line.startsWith("http") && currentChannel) {
-        result[counter] = {
-          channel_name: currentChannel,
-          group_title: "CS OTT | ZEE5", // ✅ FORCED
-          tvg_logo: currentLogo,
-          url: line,
-          user_agent: currentUserAgent,
-          headers: currentHeaders
-        };
+      // ❌ Skip if no valid URL
+      if (!streamUrl) return;
 
-        counter++;
+      // 🔹 Build M3U entry
+      m3u += `#EXTINF:-1 tvg-logo="${logo}" group-title="${GROUP_TITLE}",${name}\n`;
+      m3u += extraLines;
+      m3u += `${streamUrl}\n\n`;
+    });
 
-        // Reset
-        currentLogo = null;
-        currentChannel = null;
-        currentHeaders = {};
-        currentUserAgent = null;
-      }
-    }
+    fs.writeFileSync(OUTPUT_FILE, m3u, "utf-8");
 
-    fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result, null, 2), "utf-8");
-    console.log("✅ stream.json created with full extraction");
+    console.log("✅ M3U playlist generated successfully!");
 
-  } catch (error) {
-    console.error("❌ Error:", error.message);
+  } catch (err) {
+    console.error("❌ Error:", err.message);
   }
 }
 
-// 🔧 Clean weird encoded text
+// 🔧 Clean text
 function cleanText(text) {
   return text
     .replace(/[^\x20-\x7E]+/g, " ")
@@ -88,4 +78,4 @@ function cleanText(text) {
     .trim();
 }
 
-fetchAndConvert();
+convertJSONtoM3U();
